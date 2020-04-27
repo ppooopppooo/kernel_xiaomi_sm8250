@@ -279,11 +279,7 @@ static int binder_update_page_range(struct binder_alloc *alloc, int allocate,
 		/* vm_insert_page does not seem to increment the refcount */
 	}
 	if (mm) {
-<<<<<<< HEAD
-		up_read(&mm->mmap_sem);
-=======
 		mmap_write_unlock(mm);
->>>>>>> e680cd14cc5e (BACKPORT: mmap locking API: use coccinelle to convert mmap_sem rwsem call sites)
 		mmput_async(mm);
 	}
 	return 0;
@@ -316,11 +312,7 @@ err_page_ptr_cleared:
 	}
 err_no_vma:
 	if (mm) {
-<<<<<<< HEAD
-		up_read(&mm->mmap_sem);
-=======
 		mmap_write_unlock(mm);
->>>>>>> e680cd14cc5e (BACKPORT: mmap locking API: use coccinelle to convert mmap_sem rwsem call sites)
 		mmput_async(mm);
 	}
 	return vma ? -ENOMEM : -ESRCH;
