@@ -5105,10 +5105,22 @@ static struct attribute_group display_fs_attrs_group = {
 	.attrs = display_fs_attrs,
 };
 
+static struct attribute *display_fs_attrs[] = {
+	NULL,
+};
+
+static struct attribute_group display_fs_attrs_group = {
+	.attrs = display_fs_attrs,
+};
+
 static int dsi_display_sysfs_init(struct dsi_display *display)
 {
 	int rc = 0;
 	struct device *dev = &display->pdev->dev;
+
+	rc = sysfs_create_group(&dev->kobj, &display_fs_attrs_group);
+	if (rc)
+		pr_err("failed to create display device attributes");
 
 	rc = sysfs_create_group(&dev->kobj, &display_fs_attrs_group);
 	if (rc)
@@ -5120,6 +5132,9 @@ static int dsi_display_sysfs_init(struct dsi_display *display)
 static int dsi_display_sysfs_deinit(struct dsi_display *display)
 {
 	struct device *dev = &display->pdev->dev;
+
+	sysfs_remove_group(&dev->kobj,
+		&display_fs_attrs_group);
 
 	sysfs_remove_group(&dev->kobj,
 		&display_fs_attrs_group);
