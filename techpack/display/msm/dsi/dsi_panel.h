@@ -383,22 +383,10 @@ int dsi_panel_tx_cmd_set(struct dsi_panel *panel,
 				enum dsi_cmd_set_type type);
 int dsi_panel_update_backlight(struct dsi_panel *panel,
 				u32 bl_lvl);
-<<<<<<< HEAD
 int dsi_panel_apply_hbm_mode(struct dsi_panel *panel);
-=======
-int dsi_panel_get_cmd_pkt_count(const char *data, u32 length, u32 *cnt);
-int dsi_panel_alloc_cmd_packets(struct dsi_panel_cmd_set *cmd,
-				u32 packet_count);
-int dsi_panel_create_cmd_packets(const char *data,
-				u32 length,
-				u32 count,
-				struct dsi_cmd_desc *cmd);
-void dsi_panel_destroy_cmd_packets(struct dsi_panel_cmd_set *set);
-void dsi_panel_dealloc_cmd_packets(struct dsi_panel_cmd_set *set);
 
 int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status);
 
 u32 dsi_panel_get_fod_dim_alpha(struct dsi_panel *panel);
 
->>>>>>> c47c7a7e8aab (techpack: display: msm: implement fod handling)
 #endif /* _DSI_PANEL_H_ */
