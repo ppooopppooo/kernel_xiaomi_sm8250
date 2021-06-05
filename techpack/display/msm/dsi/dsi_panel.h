@@ -239,6 +239,8 @@ struct dsi_panel {
 	int power_mode;
 	enum dsi_panel_physical_type panel_type;
 
+	int hbm_mode;
+
 	struct brightness_alpha_pair *fod_dim_lut;
 	unsigned int fod_dim_lut_len;
 	u8 fod_dim_alpha;
@@ -385,5 +387,6 @@ void dsi_panel_dealloc_cmd_packets(struct dsi_panel_cmd_set *set);
 int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status);
 bool dsi_panel_get_fod_ui(struct dsi_panel *panel);
 void dsi_panel_set_fod_ui(struct dsi_panel *panel, bool status);
+int dsi_panel_apply_hbm_mode(struct dsi_panel *panel);
 
 #endif /* _DSI_PANEL_H_ */

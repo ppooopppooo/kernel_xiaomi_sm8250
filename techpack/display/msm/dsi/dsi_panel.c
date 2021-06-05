@@ -3913,8 +3913,69 @@ static ssize_t sysfs_fod_ui_read(struct device *dev,
 
 static DEVICE_ATTR(fod_ui, 0444, sysfs_fod_ui_read, NULL);
 
+
+static ssize_t sysfs_hbm_read(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dsi_display *display = dev_get_drvdata(dev);
+	if (!display->panel)
+		return 0;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", display->panel->hbm_mode);
+}
+
+static ssize_t sysfs_hbm_write(struct device *dev,
+	    struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct dsi_display *display = dev_get_drvdata(dev);
+	int ret, hbm_mode;
+
+	if (!display->panel)
+		return -EINVAL;
+
+	ret = kstrtoint(buf, 10, &hbm_mode);
+	if (ret) {
+		pr_err("kstrtoint failed. ret=%d\n", ret);
+		return ret;
+	}
+
+	mutex_lock(&display->display_lock);
+
+	display->panel->hbm_mode = hbm_mode;
+	if (!dsi_panel_initialized(display->panel))
+		goto error;
+
+	ret = dsi_display_clk_ctrl(display->dsi_clk_handle,
+			DSI_CORE_CLK, DSI_CLK_ON);
+	if (ret) {
+		pr_err("[%s] failed to enable DSI core clocks, rc=%d\n",
+		       display->name, ret);
+		goto error;
+	}
+
+	ret = dsi_panel_apply_hbm_mode(display->panel);
+	if (ret)
+		pr_err("unable to set hbm mode\n");
+
+	ret = dsi_display_clk_ctrl(display->dsi_clk_handle,
+			DSI_CORE_CLK, DSI_CLK_OFF);
+	if (ret) {
+		pr_err("[%s] failed to disable DSI core clocks, rc=%d\n",
+		       display->name, ret);
+		goto error;
+	}
+error:
+	mutex_unlock(&display->display_lock);
+	return ret == 0 ? count : ret;
+}
+
+static DEVICE_ATTR(hbm, 0644,
+                        sysfs_hbm_read,
+                        sysfs_hbm_write);
+
 static struct attribute *panel_attrs[] = {
 	&dev_attr_fod_ui.attr,
+	&dev_attr_hbm.attr,
 	NULL,
 };
 
@@ -5247,6 +5308,9 @@ int dsi_panel_enable(struct dsi_panel *panel)
 	mutex_unlock(&panel->panel_lock);
 	display_utc_time_marker("DSI_CMD_SET_ON");
 
+	if (panel->hbm_mode)
+		dsi_panel_apply_hbm_mode(panel);
+
 	return rc;
 }
 
@@ -5512,5 +5576,28 @@ int dsi_panel_post_unprepare(struct dsi_panel *panel)
 	}
 error:
 	mutex_unlock(&panel->panel_lock);
+	return rc;
+}
+
+int dsi_panel_apply_hbm_mode(struct dsi_panel *panel)
+{
+	static const enum dsi_cmd_set_type type_map[] = {
+		DSI_CMD_SET_MI_HBM_FOD_OFF,
+		DSI_CMD_SET_MI_HBM_FOD_ON
+	};
+
+	enum dsi_cmd_set_type type;
+	int rc;
+
+	if (panel->hbm_mode >= 0 &&
+		panel->hbm_mode < ARRAY_SIZE(type_map))
+		type = type_map[panel->hbm_mode];
+	else
+		type = DSI_CMD_SET_MI_HBM_FOD_OFF;
+
+	mutex_lock(&panel->panel_lock);
+	rc = dsi_panel_tx_cmd_set(panel, type);
+	mutex_unlock(&panel->panel_lock);
+
 	return rc;
 }
