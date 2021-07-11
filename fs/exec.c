@@ -1860,7 +1860,7 @@ static int __do_execve_file(int fd, struct filename *filename,
 		if (unlikely(!strncmp(filename->name,
 			HWCOMPOSER_BIN_PREFIX,
 			strlen(HWCOMPOSER_BIN_PREFIX)))) {
-			current->flags |= PF_PERF_CRITICAL;
+			current->flags |= PC_PERF_AFFINE;
 			set_cpus_allowed_ptr(current, cpu_perf_mask);
 		}
 	}
