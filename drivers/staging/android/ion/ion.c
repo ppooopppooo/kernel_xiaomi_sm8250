@@ -552,7 +552,7 @@ static void *ion_dma_buf_kmap(struct dma_buf *dmabuf, unsigned long offset)
 	 * addresses are virtually contiguous implement this properly
 	 */
 	void *vaddr = ion_dma_buf_vmap(dmabuf);
-
+    
 	if (IS_ERR(vaddr))
 		return vaddr;
 
