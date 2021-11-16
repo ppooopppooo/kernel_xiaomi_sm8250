@@ -852,6 +852,14 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 	int rc;
 
 	if (status) {
+
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+		if (ea_panel_is_enabled()) {
+			ea_panel_mode_ctrl(panel, 0);
+			panel->resend_ea = true;
+		}
+#endif
+
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_MI_HBM_FOD_ON);
 		if (rc)
 			return rc;
@@ -868,6 +876,14 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 			return rc;
 
 		panel->fod_hbm_enabled = false;
+
+#ifdef CONFIG_EXPOSURE_ADJUSTMENT
+		if (panel->resend_ea) {
+			ea_panel_mode_ctrl(panel, 1);
+			panel->resend_ea = false;
+		}
+#endif
+
 	}
 
 	return 0;

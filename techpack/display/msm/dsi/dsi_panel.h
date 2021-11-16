@@ -244,6 +244,8 @@ struct dsi_panel {
 	u8 fod_dim_alpha;
 	bool fod_hbm_enabled;
 	bool fod_ui;
+
+	bool resend_ea;
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)
