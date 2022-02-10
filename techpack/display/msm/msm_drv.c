@@ -48,7 +48,6 @@
 #include "msm_mmu.h"
 #include "sde_wb.h"
 #include "sde_dbg.h"
-#include "dsi/dsi_panel_mi.h"
 
 /*
  * MSM driver version:
@@ -64,9 +63,6 @@
 #define MSM_VERSION_PATCHLEVEL	0
 
 static DEFINE_MUTEX(msm_release_lock);
-
-#define IDLE_ENCODER_MASK_DEFAULT	1
-#define IDLE_TIMEOUT_MS_DEFAULT		100
 
 #define IDLE_ENCODER_MASK_DEFAULT	1
 #define IDLE_TIMEOUT_MS_DEFAULT		100
@@ -2224,8 +2220,6 @@ static void msm_pdev_shutdown(struct platform_device *pdev)
 		DRM_ERROR("invalid msm drm private node\n");
 		return;
 	}
-
-	dsi_panel_power_turn_off(false);
 
 	msm_lastclose(ddev);
 
