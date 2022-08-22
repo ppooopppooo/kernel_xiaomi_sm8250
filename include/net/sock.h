@@ -474,10 +474,7 @@ struct sock {
 	kuid_t			sk_uid;
 #if IS_ENABLED(CONFIG_DEBUG_SPINLOCK) || IS_ENABLED(CONFIG_DEBUG_LOCK_ALLOC)
 	spinlock_t		sk_peer_lock;
-#else
-	/* sk_peer_lock is in the ANDROID_KABI_RESERVE(1) field below */
 #endif
-        pid_t                   pid_num;
 	struct pid		*sk_peer_pid;
 	const struct cred	*sk_peer_cred;
 
