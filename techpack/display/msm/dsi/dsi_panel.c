@@ -813,7 +813,7 @@ bool dc_skip_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 
 static u32 dsi_panel_get_backlight(struct dsi_panel *panel)
 {
-	return panel->bl_config.real_bl_level;
+	return panel->bl_config.bl_level;
 }
 
 static u32 interpolate(uint32_t x, uint32_t xa, uint32_t xb,
@@ -873,7 +873,7 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 		panel->fod_hbm_enabled = true;
 	} else {
 		rc = dsi_panel_set_backlight(panel,
-					     panel->bl_config.real_bl_level);
+					     panel->bl_config.bl_level);
 		if (rc)
 			return rc;
 
@@ -983,7 +983,6 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 		mi_cfg->dc_enable = false;
 	}
 	mi_cfg->last_bl_level = bl_lvl;
-	bl->real_bl_level = bl_lvl;
 
 	panel->fod_dim_alpha = dsi_panel_get_fod_dim_alpha(panel);
 
@@ -2900,7 +2899,6 @@ static int dsi_panel_parse_bl_config(struct dsi_panel *panel)
 
 	panel->bl_config.bl_scale = MAX_BL_SCALE_LEVEL;
 	panel->bl_config.bl_scale_sv = MAX_SV_BL_SCALE_LEVEL;
-	panel->bl_config.real_bl_level = 0;
 
 	rc = utils->read_u32(utils->data, "qcom,mdss-dsi-bl-min-level", &val);
 	if (rc) {
