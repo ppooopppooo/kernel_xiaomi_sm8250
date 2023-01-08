@@ -20,7 +20,6 @@
 #include <linux/pagevec.h>
 #include <linux/uio.h>
 #include <linux/uuid.h>
-#include <linux/uidgid.h>
 #include <linux/file.h>
 #include <linux/nls.h>
 #include <linux/sched/signal.h>
@@ -268,8 +267,6 @@ static int f2fs_do_sync_file(struct file *file, loff_t start, loff_t end,
 		.for_reclaim = 0,
 	};
 	unsigned int seq_id = 0;
-	ktime_t start_time, delta;
-	unsigned long long duration;
 
 	if (unlikely(f2fs_readonly(inode->i_sb)))
 		return 0;
@@ -284,7 +281,6 @@ static int f2fs_do_sync_file(struct file *file, loff_t start, loff_t end,
 		trace_android_fs_fsync_start(inode,
 				current->pid, path, current->comm);
 	}
-	start_time = ktime_get();
 
 	if (S_ISDIR(inode->i_mode))
 		goto go_write;
@@ -343,7 +339,6 @@ go_write:
 	f2fs_up_read(&F2FS_I(inode)->i_sem);
 
 	if (cp_reason) {
-		stat_inc_cp_reason(sbi, cp_reason);
 		/* all the dirty node pages should be flushed for POR */
 		ret = f2fs_sync_fs(inode->i_sb, 1);
 
@@ -403,26 +398,7 @@ flush_out:
 	}
 	f2fs_update_time(sbi, REQ_TIME);
 out:
-	delta = ktime_sub(ktime_get(), start_time);
-	duration = (unsigned long long) ktime_to_ns(delta) / (1000 * 1000);
-
-	/* print slow fsync spend more than 1s */
-	if (duration > 1000) {
-		char *file_path, file_pathbuf[MAX_TRACE_PATHBUF_LEN];
-
-		file_path = android_fstrace_get_pathname(file_pathbuf,
-				MAX_TRACE_PATHBUF_LEN, inode);
-		pr_info("[f2fs] slow fsync: %llu ms, cp_reason: %s, "
-			"datasync = %d, ret = %d, comm: %s: (uid %u, gid %u), "
-			"entry: %s", duration, f2fs_cp_reasons[cp_reason],
-			datasync, ret, current->comm,
-			from_kuid_munged(&init_user_ns, current_fsuid()),
-			from_kgid_munged(&init_user_ns, current_fsgid()),
-			file_path);
-	}
-
 	trace_f2fs_sync_file_exit(inode, cp_reason, datasync, ret);
-	stat_inc_sync_file_count(sbi);
 	trace_android_fs_fsync_end(inode, start, end - start);
 
 	return ret;
@@ -632,7 +608,7 @@ void f2fs_truncate_data_blocks_range(struct dnode_of_data *dn, int count)
 	raw_node = F2FS_NODE(dn->node_page);
 	addr = blkaddr_in_node(raw_node) + base + ofs;
 
-	/* Assumption: truncateion starts with cluster */
+	/* Assumption: truncation starts with cluster */
 	for (; count > 0; count--, addr++, dn->ofs_in_node++, cluster_index++) {
 		block_t blkaddr = le32_to_cpu(*addr);
 
@@ -679,7 +655,8 @@ void f2fs_truncate_data_blocks_range(struct dnode_of_data *dn, int count)
 		 */
 		fofs = f2fs_start_bidx_of_node(ofs_of_node(dn->node_page),
 							dn->inode) + ofs;
-		f2fs_update_extent_cache_range(dn, fofs, 0, len);
+		f2fs_update_read_extent_cache_range(dn, fofs, 0, len);
+		f2fs_update_age_extent_cache_range(dn, fofs, nr_free);
 		dec_valid_block_count(sbi, dn->inode, nr_free);
 	}
 	dn->ofs_in_node = ofs;
@@ -1515,7 +1492,7 @@ static int f2fs_do_zero_range(struct dnode_of_data *dn, pgoff_t start,
 		f2fs_set_data_blkaddr(dn);
 	}
 
-	f2fs_update_extent_cache_range(dn, start, 0, index - start);
+	f2fs_update_read_extent_cache_range(dn, start, 0, index - start);
 
 	return ret;
 }
@@ -1933,6 +1910,10 @@ static int f2fs_setflags_common(struct inode *inode, u32 iflags, u32 mask)
 			if (!f2fs_disable_compressed_file(inode))
 				return -EINVAL;
 		} else {
+			/* try to convert inline_data to support compression */
+			int err = f2fs_convert_inline_inode(inode);
+			if (err)
+				return err;
 			if (!f2fs_may_compress(inode))
 				return -EINVAL;
 			if (S_ISREG(inode->i_mode) && F2FS_HAS_BLOCKS(inode))
@@ -2106,12 +2087,13 @@ static int f2fs_ioc_getversion(struct file *filp, unsigned long arg)
 	return put_user(inode->i_generation, (int __user *)arg);
 }
 
-static int f2fs_ioc_start_atomic_write(struct file *filp)
+static int f2fs_ioc_start_atomic_write(struct file *filp, bool truncate)
 {
 	struct inode *inode = file_inode(filp);
 	struct f2fs_inode_info *fi = F2FS_I(inode);
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
 	struct inode *pinode;
+	loff_t isize;
 	int ret;
 
 	if (!inode_owner_or_capable(inode))
@@ -2170,13 +2152,25 @@ static int f2fs_ioc_start_atomic_write(struct file *filp)
 		f2fs_up_write(&fi->i_gc_rwsem[WRITE]);
 		goto out;
 	}
-	f2fs_i_size_write(fi->cow_inode, i_size_read(inode));
+
+	f2fs_write_inode(inode, NULL);
 
 	stat_inc_atomic_inode(inode);
 
 	set_inode_flag(inode, FI_ATOMIC_FILE);
 	set_inode_flag(fi->cow_inode, FI_COW_FILE);
 	clear_inode_flag(fi->cow_inode, FI_INLINE_DATA);
+
+	isize = i_size_read(inode);
+	fi->original_i_size = isize;
+	if (truncate) {
+		set_inode_flag(inode, FI_ATOMIC_REPLACE);
+		truncate_inode_pages_final(inode->i_mapping);
+		f2fs_i_size_write(inode, 0);
+		isize = 0;
+	}
+	f2fs_i_size_write(fi->cow_inode, isize);
+
 	f2fs_up_write(&fi->i_gc_rwsem[WRITE]);
 
 	f2fs_update_time(sbi, REQ_TIME);
@@ -2207,16 +2201,14 @@ static int f2fs_ioc_commit_atomic_write(struct file *filp)
 
 	if (f2fs_is_atomic_file(inode)) {
 		ret = f2fs_commit_atomic_write(inode);
-		if (ret)
-			goto unlock_out;
-
-		ret = f2fs_do_sync_file(filp, 0, LLONG_MAX, 0, true);
 		if (!ret)
-			f2fs_abort_atomic_write(inode, false);
+			ret = f2fs_do_sync_file(filp, 0, LLONG_MAX, 0, true);
+
+		f2fs_abort_atomic_write(inode, ret);
 	} else {
 		ret = f2fs_do_sync_file(filp, 0, LLONG_MAX, 1, false);
 	}
-unlock_out:
+
 	inode_unlock(inode);
 	mnt_drop_write_file(filp);
 	return ret;
@@ -2622,7 +2614,7 @@ static int f2fs_defragment_range(struct f2fs_sb_info *sbi,
 	struct f2fs_map_blocks map = { .m_next_extent = NULL,
 					.m_seg_type = NO_CHECK_TYPE,
 					.m_may_create = false };
-	struct extent_info ei = {0, 0, 0};
+	struct extent_info ei = {0, };
 	pgoff_t pg_start, pg_end, next_pgofs;
 	unsigned int blk_per_seg = sbi->blocks_per_seg;
 	unsigned int total = 0, sec_num;
@@ -2654,7 +2646,7 @@ static int f2fs_defragment_range(struct f2fs_sb_info *sbi,
 	 * lookup mapping info in extent cache, skip defragmenting if physical
 	 * block addresses are continuous.
 	 */
-	if (f2fs_lookup_extent_cache(inode, pg_start, &ei)) {
+	if (f2fs_lookup_read_extent_cache(inode, pg_start, &ei)) {
 		if (ei.fofs + ei.len >= pg_end)
 			goto out;
 	}
@@ -4280,7 +4272,9 @@ static long __f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	case FS_IOC_GETVERSION:
 		return f2fs_ioc_getversion(filp, arg);
 	case F2FS_IOC_START_ATOMIC_WRITE:
-		return f2fs_ioc_start_atomic_write(filp);
+		return f2fs_ioc_start_atomic_write(filp, false);
+	case F2FS_IOC_START_ATOMIC_REPLACE:
+		return f2fs_ioc_start_atomic_write(filp, true);
 	case F2FS_IOC_COMMIT_ATOMIC_WRITE:
 		return f2fs_ioc_commit_atomic_write(filp);
 	case F2FS_IOC_ABORT_ATOMIC_WRITE:
