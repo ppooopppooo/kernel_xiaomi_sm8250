@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2014,2016,2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014,2016, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -1439,16 +1439,12 @@ static int etm4_probe(struct amba_device *adev, const struct amba_id *id)
 	}
 
 	cpus_read_lock();
-	ret = smp_call_function_single(drvdata->cpu,
-					etm4_init_arch_data, drvdata, 1);
-	if (ret) {
+	etmdrvdata[drvdata->cpu] = drvdata;
+
+	if (smp_call_function_single(drvdata->cpu,
+				etm4_init_arch_data,  drvdata, 1))
 		dev_err(dev, "ETM arch init failed\n");
-		cpus_read_unlock();
-		return ret;
-	} else if (!etm4_arch_supported(drvdata->arch)) {
-		cpus_read_unlock();
-		return -EINVAL;
-	}
+
 	if (!etm4_count++) {
 		cpuhp_setup_state_nocalls_cpuslocked(CPUHP_AP_ARM_CORESIGHT_STARTING,
 						     "arm/coresight4:starting",
@@ -1466,6 +1462,11 @@ static int etm4_probe(struct amba_device *adev, const struct amba_id *id)
 	}
 
 	cpus_read_unlock();
+
+	if (etm4_arch_supported(drvdata->arch) == false) {
+		ret = -EINVAL;
+		goto err_arch_supported;
+	}
 
 	etm4_init_trace_id(drvdata);
 	etm4_set_default(&drvdata->config);
@@ -1489,7 +1490,6 @@ static int etm4_probe(struct amba_device *adev, const struct amba_id *id)
 	}
 
 	pm_runtime_put(&adev->dev);
-	etmdrvdata[drvdata->cpu] = drvdata;
 	dev_info(dev, "CPU%d: ETM v%d.%d initialized\n",
 		 drvdata->cpu, drvdata->arch >> 4, drvdata->arch & 0xf);
 
