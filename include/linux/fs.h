@@ -307,12 +307,14 @@ enum rw_hint {
 #define IOCB_APPEND		(__force int) RWF_APPEND
 
 /* non-RWF related bits - start at 16 */
-#define IOCB_EVENTFD		(1 << 16)
+#define IOCB_EVENTFD	(1 << 16)
 #define IOCB_DIRECT		(1 << 17)
 #define IOCB_WRITE		(1 << 18)
 /* iocb->ki_waitq is valid */
 #define IOCB_WAITQ		(1 << 19)
 #define IOCB_NOIO		(1 << 20)
+/* kiocb is a read or write operation submitted by fs/aio.c. */
+#define IOCB_AIO_RW		(1 << 23)
 
 struct kiocb {
 	struct file		*ki_filp;
@@ -1737,6 +1739,9 @@ int vfs_mkobj(struct dentry *, umode_t,
 int vfs_mkobj2(struct vfsmount *, struct dentry *, umode_t,
 		int (*f)(struct dentry *, umode_t, void *),
 		void *);
+
+int vfs_fchown(struct file *file, uid_t user, gid_t group);
+int vfs_fchmod(struct file *file, umode_t mode);
 
 extern long vfs_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 
