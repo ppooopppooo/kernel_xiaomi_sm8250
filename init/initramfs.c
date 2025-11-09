@@ -667,35 +667,35 @@ static int __init populate_rootfs(void)
 	err = unpack_to_rootfs(__initramfs_start, __initramfs_size);
 	if (err)
 		panic("%s", err); /* Failed to decompress INTERNAL initramfs */
-		/* If available load the bootloader supplied initrd */
-		if (initrd_start && !IS_ENABLED(CONFIG_INITRAMFS_FORCE)) {
-			#ifdef CONFIG_BLK_DEV_RAM
-			printk(KERN_INFO "Trying to unpack rootfs image as initramfs...\n");
-			err = unpack_to_rootfs((char *)initrd_start,
-								   initrd_end - initrd_start);
-			if (!err)
-				goto done;
+	/* If available load the bootloader supplied initrd */
+	if (initrd_start && !IS_ENABLED(CONFIG_INITRAMFS_FORCE)) {
+#ifdef CONFIG_BLK_DEV_RAM
+		printk(KERN_INFO "Trying to unpack rootfs image as initramfs...\n");
+		err = unpack_to_rootfs((char *)initrd_start,
+			initrd_end - initrd_start);
+		if (!err)
+			goto done;
 
-			clean_rootfs();
-			populate_initrd_image(err);
-			done:
-			/* empty statement */;
-			#else
-			printk(KERN_INFO "Unpacking initramfs...\n");
-			err = unpack_to_rootfs((char *)initrd_start,
-								   initrd_end - initrd_start);
-			if (err)
-				printk(KERN_EMERG "Initramfs unpacking failed: %s\n", err);
-			#endif
-		}
-		free_initrd();
-		flush_delayed_fput();
-		/*
-		 * Try loading default modules from initramfs.  This gives
-		 * us a chance to load before device_initcalls.
-		 */
-		load_default_modules();
+		clean_rootfs();
+		populate_initrd_image(err);
+	done:
+		/* empty statement */;
+#else
+		printk(KERN_INFO "Unpacking initramfs...\n");
+		err = unpack_to_rootfs((char *)initrd_start,
+			initrd_end - initrd_start);
+		if (err)
+			printk(KERN_EMERG "Initramfs unpacking failed: %s\n", err);
+#endif
+	}
+	free_initrd();
+	flush_delayed_fput();
+	/*
+	 * Try loading default modules from initramfs.  This gives
+	 * us a chance to load before device_initcalls.
+	 */
+	load_default_modules();
 
-		return 0;
+	return 0;
 }
 rootfs_initcall(populate_rootfs);

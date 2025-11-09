@@ -2682,7 +2682,7 @@ static int rmnet_ipa_ap_resume(struct device *dev)
 	atomic_set(&rmnet_ipa3_ctx->ap_suspend, 0);
 	if (netdev)
 		netif_wake_queue(netdev);
-		netif_device_attach(netdev);
+	netif_device_attach(netdev);
 	IPAWANDBG("Exit\n");
 
 	return 0;
